@@ -5,37 +5,51 @@
 'use strict';
 
 module.exports = function (app) {
-  return {
-    before: function (middleware, group) {
-      if (!(middleware instanceof Array)) {
-        middleware = [middleware];
-      }
+  return function (group) {
+    return new Group(app, group);
+  }
+};
 
-      var oldRoutes = {};
+function Group(app, fn) {
+  var oldRoutes = {};
+  this.groupRoutes = [];
 
-      for (var method in app.routes) {
-        if (Object.prototype.hasOwnProperty.call(app.routes, method)) {
-          oldRoutes[method] = [];
+  // save routes that are already registered
+  for (var method in app.routes) {
+    if (Object.prototype.hasOwnProperty.call(app.routes, method)) {
+      oldRoutes[method] = [];
 
-          app.routes[method].forEach(function (route) {
-            oldRoutes[method].push(route);
-          });
-        }
-      }
-
-      group();
-
-      for (var method in app.routes) {
-        if (Object.prototype.hasOwnProperty.call(app.routes, method)) {
-          app.routes[method].forEach(function (route) {
-            oldRoutes[method] = oldRoutes[method] || [];
-
-            if (!~oldRoutes[method].indexOf(route)) {
-              route.callbacks = middleware.concat(route.callbacks);
-            }
-          });
-        }
-      }
+      app.routes[method].forEach(function (route) {
+        oldRoutes[method].push(route);
+      });
     }
-  };
+  }
+
+  // add passed routes
+  fn();
+
+  // get new routes
+  for (var method in app.routes) {
+    if (Object.prototype.hasOwnProperty.call(app.routes, method)) {
+      oldRoutes[method] = oldRoutes[method] || [];
+
+      app.routes[method].forEach(function (route) {
+        if (!~oldRoutes[method].indexOf(route)) {
+          this.groupRoutes.push(route);
+        }
+      }, this);
+    }
+  }
+}
+
+Group.prototype.before = function (middleware) {
+  if (!(middleware instanceof Array)) {
+    middleware = [middleware];
+  }
+
+  this.groupRoutes.forEach(function (route) {
+    route.callbacks = middleware.concat(route.callbacks);
+  });
+
+  return this;
 };
